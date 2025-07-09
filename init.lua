@@ -259,7 +259,7 @@ end, {})
 
 -- new note command
 local function create_new_note()
-  local notes_dir = '~/Nextcloud/org/deft/'
+  local notes_dir = '~/nextcloud/org/deft/'
   vim.ui.input({ prompt = 'New note name: ' }, function(input)
     if input then
       local sanitizied_input = input:gsub('%s+', '-')
@@ -643,7 +643,7 @@ require('lazy').setup({
       -- deft
       vim.keymap.set('n', '<leader>de', function()
         builtin.live_grep {
-          cwd = '/home/kjell/Nextcloud/org/deft/',
+          cwd = '/home/kjell/nextcloud/org/deft/',
         }
       end, { desc = 'search notes' })
 
@@ -1000,21 +1000,22 @@ require('lazy').setup({
         local disable_filetypes = { c = true, cpp = true }
         local lsp_format_opt
         if disable_filetypes[vim.bo[bufnr].filetype] then
-          lsp_format_opt = 'never'
+          return nil
         else
-          lsp_format_opt = 'fallback'
+          return {
+            timeout_ms = 500,
+            lsp_format = 'fallback',
+          }
         end
-        return {
-          timeout_ms = 500,
-          lsp_format = lsp_format_opt,
-        }
       end,
+      log_level = vim.log.levels.DEBUG,
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
         python = { 'isort', 'black', 'autopep8' },
         go = { 'goimports', 'gofmt' },
         markdown = { 'prettier' },
+        html = { 'prettier' },
         typescript = { 'biome' },
         typescriptreact = { 'biome' },
         rust = function()
