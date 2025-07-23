@@ -919,7 +919,7 @@ require('lazy').setup({
       })
       vim.lsp.enable 'biome'
       vim.lsp.config('biome', {
-        cmd = { 'biome', 'lsp-proxy' },
+        cmd = { 'npx', 'biome', 'lsp-proxy' },
         filetypes = {
           'astro',
           'css',
@@ -1016,8 +1016,8 @@ require('lazy').setup({
         go = { 'goimports', 'gofmt' },
         markdown = { 'prettier' },
         html = { 'prettier' },
-        typescript = { 'biome' },
-        typescriptreact = { 'biome' },
+        typescript = { 'biome-check' },
+        typescriptreact = { 'biome-check' },
         rust = function()
           if is_dioxus_project() then
             return { 'dxfmt' }
