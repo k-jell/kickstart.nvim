@@ -88,7 +88,7 @@ P.S. You can delete this when you're done too. It's your config now! :)
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
+vim.g.maplocalleader = ','
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
@@ -259,7 +259,7 @@ end, {})
 
 -- new note command
 local function create_new_note()
-  local notes_dir = '~/nextcloud/org/deft/'
+  local notes_dir = '~/Nextcloud2/org/deft/'
   vim.ui.input({ prompt = 'New note name: ' }, function(input)
     if input then
       local sanitizied_input = input:gsub('%s+', '-')
@@ -420,6 +420,11 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'BufNewFile' }, {
 
 -- add new filetypes
 vim.filetype.add { extension = { nomad = 'hcl' } }
+vim.filetype.add {
+  extension = {
+    gohtml = 'html',
+  },
+}
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
@@ -643,7 +648,7 @@ require('lazy').setup({
       -- deft
       vim.keymap.set('n', '<leader>de', function()
         builtin.live_grep {
-          cwd = '/home/kjell/nextcloud/org/deft/',
+          cwd = '/home/kjell/Nextcloud2/org/deft/',
         }
       end, { desc = 'search notes' })
 
@@ -998,7 +1003,6 @@ require('lazy').setup({
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
         local disable_filetypes = { c = true, cpp = true }
-        local lsp_format_opt
         if disable_filetypes[vim.bo[bufnr].filetype] then
           return nil
         else
@@ -1012,12 +1016,13 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        python = { 'isort', 'black', 'autopep8' },
-        go = { 'goimports', 'gofmt' },
+        python = { 'ruff_format', 'ruff_organize_imports' },
+        go = { 'goimports', 'gofumpt' },
         markdown = { 'prettier' },
         html = { 'prettier' },
         typescript = { 'biome-check' },
         typescriptreact = { 'biome-check' },
+        sql = { 'sleek' },
         rust = function()
           if is_dioxus_project() then
             return { 'dxfmt' }
@@ -1257,15 +1262,18 @@ require('lazy').setup({
         'hcl',
         'sql',
         'typescript',
+        'gotmpl',
+        'dockerfile',
       },
       -- Autoinstall languages that are not installed
-      auto_install = true,
+      auto_install = false,
       highlight = {
         enable = true,
         -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
         --  If you are experiencing weird indenting issues, add the language to
         --  the list of additional_vim_regex_highlighting and disabled languages for indent.
         additional_vim_regex_highlighting = { 'ruby' },
+        disable = { 'latex' },
       },
       indent = { enable = true, disable = { 'ruby' } },
       incremental_selection = {
@@ -1276,9 +1284,11 @@ require('lazy').setup({
           scope_incremental = false,
           node_decremental = '<M-space>',
         },
+        disable = { 'latex' },
       },
       config = function()
         vim.treesitter.language.register('hcl', 'nomad') -- the someft filetype will use the python parser and queries.
+        vim.treesitter.language.register('html', 'gohtml')
       end,
     },
     -- There are additional nvim-treesitter modules that you can use to interact
