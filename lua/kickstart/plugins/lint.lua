@@ -7,9 +7,9 @@ return {
       local lint = require 'lint'
       lint.linters_by_ft = {
         markdown = { 'markdownlint-cli2' },
-        python = { 'ruff' },
         rust = { 'clippy' },
-        go = { 'golancilint' },
+        go = { 'golangcilint' },
+        yaml = { 'yamllint' },
       }
 
       -- To allow other plugins to add linters to require('lint').linters_by_ft,

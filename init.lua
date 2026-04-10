@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ','
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -159,6 +159,11 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 10
 
+-- https://neovim.io/doc/user/starting.html#exrc allow per project configuration and disable possibly dangerous code
+-- in local configuration
+vim.opt.exrc = true
+vim.opt.secure = true
+
 -- markdown folding
 vim.g.markdown_folding = 1
 
@@ -170,7 +175,26 @@ vim.api.nvim_create_autocmd('FileType', {
   end,
 })
 
+-- https://docs.astral.sh/ruff/editors/setup/#neovim
+-- disable ruff hover when using pyright
+vim.api.nvim_create_autocmd('LspAttach', {
+  group = vim.api.nvim_create_augroup('lsp_attach_disable_ruff_hover', { clear = true }),
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client == nil then
+      return
+    end
+    if client.name == 'ruff' then
+      -- Disable hover in favor of Pyright
+      client.server_capabilities.hoverProvider = false
+    end
+  end,
+  desc = 'LSP: Disable hover capability from Ruff',
+})
+
 vim.o.completeopt = 'menuone,noinsert,popup'
+
+-- vim.op
 
 -- window border
 -- this would set it globally and break telescope visuals
@@ -179,6 +203,44 @@ vim.o.completeopt = 'menuone,noinsert,popup'
 vim.keymap.set('n', 'K', function()
   vim.lsp.buf.hover { border = 'rounded' }
 end, { desc = 'Hover Documentation' })
+
+-- open ruff codes in telescope
+
+vim.api.nvim_create_user_command('RuffLineLinks', function()
+  local line = vim.fn.line '.' - 1
+  local diags = vim.diagnostic.get(0, { lnum = line })
+
+  local items = {}
+
+  for _, d in ipairs(diags) do
+    local lsp = d.user_data and d.user_data.lsp
+    local cd = lsp and lsp.codeDescription
+    if cd and cd.href then
+      table.insert(items, {
+        label = string.format('%s — %s', d.code or '?', d.message),
+        url = cd.href,
+      })
+    end
+  end
+
+  if #items == 0 then
+    vim.notify('No Ruff diagnostic links on this line', vim.log.levels.INFO)
+    return
+  end
+
+  vim.ui.select(items, {
+    prompt = 'Ruff rule documentation',
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(choice)
+    if choice then
+      vim.ui.open(choice.url)
+    end
+  end)
+end, { desc = 'Open Ruff diagnostic links (code-action style)' })
+
+vim.keymap.set('n', '<leader>cr', '<cmd>RuffLineLinks<CR>', { desc = '[C]ode [R]uff Links' })
 
 -- function to detect if currently in a dioxus project
 local function is_dioxus_project()
@@ -199,6 +261,15 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>qd', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+
+-- toggle linting keymap
+vim.keymap.set('n', '<leader>l', function()
+  if vim.diagnostic.is_enabled() then
+    vim.diagnostic.enable(false)
+  else
+    vim.diagnostic.enable(true)
+  end
+end, { desc = 'toggle lint' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -245,6 +316,9 @@ vim.keymap.del('n', 'grr')
 vim.keymap.del('n', 'gra')
 vim.keymap.del('n', 'grn')
 
+-- doge keybind
+vim.keymap.set('n', '<leader>cds', '<cmd>:DogeGenerate google<cr>', { desc = '[C]ode [D]oc[S]tring' })
+
 -- user command
 vim.api.nvim_create_user_command('LintInfo', function()
   local filetype = vim.bo.filetype
@@ -259,7 +333,7 @@ end, {})
 
 -- new note command
 local function create_new_note()
-  local notes_dir = '~/Nextcloud2/org/deft/'
+  local notes_dir = '~/Nextcloud/org/deft/'
   vim.ui.input({ prompt = 'New note name: ' }, function(input)
     if input then
       local sanitizied_input = input:gsub('%s+', '-')
@@ -316,6 +390,25 @@ vim.keymap.set('n', 'Q', vim.diagnostic.open_float)
 -- git hunk navigation
 vim.keymap.set('n', '<leader>hp', ':Gitsigns nav_hunk prev<CR>', { desc = '[P]rev hunk' })
 vim.keymap.set('n', '<leader>hn', ':Gitsigns nav_hunk next<CR>', { desc = '[N]ext hunk' })
+
+-- quickfix and loclist next
+local function qf_or_loc(next)
+  local win = vim.api.nvim_get_current_win()
+  local loclist = vim.fn.getloclist(win, { size = 0 })
+
+  if loclist.size > 0 then
+    return next and '<cmd>lnext<CR>' or '<cmd>lprev<CR>'
+  else
+    return next and '<cmd>cnext<CR>' or '<cmd>cprev<CR>'
+  end
+end
+
+vim.keymap.set('n', '<M-C-j>', function()
+  return qf_or_loc(true)
+end, { expr = true })
+vim.keymap.set('n', '<M-C-k>', function()
+  return qf_or_loc(false)
+end, { expr = true })
 
 -- run kotlin tests in tmux
 
@@ -387,6 +480,7 @@ function ToggleCopilot()
   end
   copilot_enabled = not copilot_enabled
 end
+
 vim.keymap.set('n', '<leader>cpt', ToggleCopilot, { desc = 'Toggle Copilot' })
 
 -- [[ Basic Autocommands ]]
@@ -536,6 +630,7 @@ require('lazy').setup({
 
       -- Document existing key chains
       spec = {
+        { '<leader>b', group = 'De[b]ug' },
         { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
         { '<leader>d', group = '[D]ocument' },
         { '<leader>r', group = '[R]ename' },
@@ -642,13 +737,17 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>qf', builtin.quickfix, { desc = 'Open [Q]uick[F]ix list' })
       vim.keymap.set('n', '<leader>qh', builtin.quickfixhistory, { desc = 'Open [Q]uick[F]ix list' })
 
+      vim.keymap.set('n', '<leader>sc', builtin.commands, { desc = '[S]earch [C]ommand list' })
+
       vim.keymap.set('n', '<leader>fr', function()
-        require('telescope').extensions.smart_open.smart_open()
+        require('telescope').extensions.smart_open.smart_open {
+          cwd_only = true,
+        }
       end, { noremap = true, silent = true, desc = '[F]ind [R]eally Smart' })
       -- deft
       vim.keymap.set('n', '<leader>de', function()
         builtin.live_grep {
-          cwd = '/home/kjell/Nextcloud2/org/deft/',
+          cwd = '/home/kjell/Nextcloud/org/deft/',
         }
       end, { desc = 'search notes' })
 
@@ -792,6 +891,8 @@ require('lazy').setup({
           --  For example, in C this would take you to the header.
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
 
+          map('gT', vim.lsp.buf.type_definition, '[G]oto [T]ype')
+
           -- highlight groups for lsp highlighting
           vim.cmd [[
             hi! LspReferenceRead cterm=bold gui=bold ctermbg=237 guibg=#343d46
@@ -898,6 +999,22 @@ require('lazy').setup({
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       -- clangd = {},
       vim.lsp.enable 'pyright'
+      vim.lsp.config('pyright', {
+        settings = {
+          pyright = {
+            disableOrganizeImports = true,
+          },
+          python = {
+            analysis = {
+              diagnosticSeverityOverrides = {
+                -- https://github.com/microsoft/pyright/blob/main/docs/configuration.md#type-check-diagnostics-settings
+                reportUndefinedVariable = 'none',
+              },
+            },
+          },
+        },
+      })
+      vim.lsp.enable 'ruff'
       vim.lsp.enable 'gopls'
       vim.lsp.enable 'rust_analyzer'
       vim.lsp.enable 'ts_ls'
@@ -1007,7 +1124,7 @@ require('lazy').setup({
           return nil
         else
           return {
-            timeout_ms = 500,
+            timeout_ms = 2500,
             lsp_format = 'fallback',
           }
         end
@@ -1222,8 +1339,39 @@ require('lazy').setup({
       --  You could remove this setup call if you don't like it,
       --  and try some other statusline plugin
       local statusline = require 'mini.statusline'
+
+      local content_active = function()
+        local mode, mode_hl = MiniStatusline.section_mode { trunc_width = 120 }
+        local git = MiniStatusline.section_git { trunc_width = 40 }
+        local diff = MiniStatusline.section_diff { trunc_width = 75 }
+        local diagnostics = MiniStatusline.section_diagnostics { trunc_width = 75 }
+        local lsp = MiniStatusline.section_lsp { trunc_width = 75 }
+        -- Always show truncated file name (i.e. relative to current working directory)
+        local filename = MiniStatusline.section_filename { trunc_width = 9999 }
+        local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
+        local location = MiniStatusline.section_location { trunc_width = 75 }
+        local search = MiniStatusline.section_searchcount { trunc_width = 75 }
+
+        return MiniStatusline.combine_groups {
+          { hl = mode_hl, strings = { mode } },
+          { hl = 'MiniStatuslineDevinfo', strings = { git, diff, diagnostics, lsp } },
+          '%<', -- Mark general truncate point
+          { hl = 'MiniStatuslineFilename', strings = { filename } },
+          '%=', -- End left alignment
+          { hl = 'MiniStatuslineFileinfo', strings = { fileinfo } },
+          { hl = mode_hl, strings = { search, location } },
+        }
+      end
       -- set use_icons to true if you have a Nerd Font
-      statusline.setup { use_icons = vim.g.have_nerd_font }
+      statusline.setup {
+        use_icons = vim.g.have_nerd_font,
+        content = {
+          active = content_active,
+          inactive = function()
+            return '%f'
+          end,
+        },
+      }
 
       -- You can configure sections in the statusline by overriding their
       -- default behavior. For example, here we set the section for
@@ -1237,66 +1385,68 @@ require('lazy').setup({
       -- ... and there is more!
       --  Check out: https://github.com/echasnovski/mini.nvim
       require('mini.move').setup()
+
+      require('mini.indentscope').setup()
     end,
   },
+
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    lazy = false,
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
-    -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = {
-        'bash',
-        'c',
-        'diff',
-        'html',
-        'lua',
-        'luadoc',
-        'markdown',
-        'markdown_inline',
-        'query',
-        'vim',
-        'vimdoc',
-        'go',
-        'python',
-        'hcl',
-        'sql',
-        'typescript',
-        'gotmpl',
-        'dockerfile',
-      },
-      -- Autoinstall languages that are not installed
-      auto_install = false,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-        disable = { 'latex' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-      incremental_selection = {
-        enable = true,
-        keymaps = {
-          init_selection = '<C-space>',
-          node_incremental = '<C-space>',
-          scope_incremental = false,
-          node_decremental = '<M-space>',
-        },
-        disable = { 'latex' },
-      },
-      config = function()
-        vim.treesitter.language.register('hcl', 'nomad') -- the someft filetype will use the python parser and queries.
-        vim.treesitter.language.register('html', 'gohtml')
-      end,
-    },
-    -- There are additional nvim-treesitter modules that you can use to interact
-    -- with nvim-treesitter. You should go explore a few and see what interests you:
-    --
-    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-    --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-    --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+    branch = 'main',
+    -- [[ Configure Treesitter ]] See `:help nvim-treesitter-intro`
+    config = function()
+      -- ensure basic parser are installed
+      local parsers = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      require('nvim-treesitter').install(parsers)
+
+      ---@param buf integer
+      ---@param language string
+      local function treesitter_try_attach(buf, language)
+        -- check if parser exists and load it
+        if not vim.treesitter.language.add(language) then
+          return
+        end
+        -- enables syntax highlighting and other treesitter features
+        vim.treesitter.start(buf, language)
+
+        -- enables treesitter based folds
+        -- for more info on folds see `:help folds`
+        -- vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+        -- vim.wo.foldmethod = 'expr'
+
+        -- enables treesitter based indentation
+        vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+      end
+
+      local available_parsers = require('nvim-treesitter').get_available()
+      vim.api.nvim_create_autocmd('FileType', {
+        callback = function(args)
+          local buf, filetype = args.buf, args.match
+
+          local language = vim.treesitter.language.get_lang(filetype)
+          if not language then
+            return
+          end
+
+          local installed_parsers = require('nvim-treesitter').get_installed 'parsers'
+
+          if vim.tbl_contains(installed_parsers, language) then
+            -- enable the parser if it is installed
+            treesitter_try_attach(buf, language)
+          elseif vim.tbl_contains(available_parsers, language) then
+            -- if a parser is available in `nvim-treesitter` auto install it, and enable it after the installation is done
+            require('nvim-treesitter').install(language):await(function()
+              treesitter_try_attach(buf, language)
+            end)
+          else
+            -- try to enable treesitter features in case the parser exists but is not available from `nvim-treesitter`
+            treesitter_try_attach(buf, language)
+          end
+        end,
+      })
+    end,
   },
 
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
